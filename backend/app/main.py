@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.predict import router as predict_router
 from app.models.loader import ModelLoader
 from app.routes.weather import router as weather_router
-
-
+from app.routes.holiday import router as holiday_router
+from app.routes.city import router as city_router
 # ── Lifespan (replaces deprecated @app.on_event) ─────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,8 +51,8 @@ app.add_middleware(
 # ── Register Routes ───────────────────────────────────────────
 app.include_router(predict_router, prefix="/api/v1", tags=["Predictions"])
 app.include_router(weather_router, prefix="/api/v1", tags=["Weather"])
-
-
+app.include_router(holiday_router, prefix="/api/v1", tags=["Holiday"])
+app.include_router(city_router, prefix="/api/v1", tags=["City"])
 # ── Root Endpoint ─────────────────────────────────────────────
 @app.get("/", tags=["General"])
 async def root():

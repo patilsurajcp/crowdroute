@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.request import PredictionRequest, PredictionResponse
 from app.models.loader import ModelLoader
-from app.services.weather import get_forecast_weather   # ← ADD THIS
+from app.services.weather import get_forecast_weather
+from app.services.holiday import get_holiday_impact        # ← ADD
 from datetime import datetime
 import pandas as pd
 
@@ -14,6 +15,14 @@ LABEL_MAP = {
     2: {"level": "HIGH",   "emoji": "🔴", "advice": "Very crowded — consider an alternate time."}
 }
 
+# Crowd multiplier → bump up predicted class
+def apply_multiplier(pred_class: int, multiplier: float) -> int:
+    if multiplier >= 2.0:
+        return min(pred_class + 2, 2)
+    elif multiplier >= 1.5:
+        return min(pred_class + 1, 2)
+    return pred_class
+
 
 def build_input(datetime_str, transport_type, is_holiday, temperature, weather_code, feature_columns):
     dt = datetime.fromisoformat(datetime_str)
@@ -25,7 +34,7 @@ def build_input(datetime_str, transport_type, is_holiday, temperature, weather_c
         'is_peak_hour':      int(dt.hour in [7, 8, 9, 17, 18, 19]),
         'is_holiday':        int(is_holiday),
         'temperature':       temperature,
-        'weather_code':      weather_code,       # ← NEW
+        'weather_code':      weather_code,
         'transport_encoded': TRANSPORT_MAP.get(transport_type, 1)
     }
     df = pd.DataFrame([data])
@@ -39,40 +48,51 @@ async def predict_crowd(request: PredictionRequest):
         model           = ModelLoader.get_model()
         feature_columns = ModelLoader.get_feature_columns()
 
-        # ── Auto-fetch real weather ──────────────────────────
+        # ── 1. Fetch Weather ─────────────────────────────────
         try:
             weather      = await get_forecast_weather(request.city, request.datetime_str)
             temperature  = weather["temperature"]
             weather_code = weather["weather_code"]
-            weather_info = {
-                "description": weather["description"],
-                "emoji":       weather["weather_emoji"],
-                "temperature": temperature
-            }
-            print(f"🌤️  Weather for {request.city}: {weather['description']} {weather['weather_emoji']} {temperature}°C")
+            print(f"🌤️  Weather: {weather['description']} {weather['weather_emoji']} {temperature}°C")
         except Exception as e:
-            # Fallback if weather API fails
-            print(f"⚠️  Weather fetch failed: {e} — using defaults")
+            print(f"⚠️  Weather fetch failed: {e}")
             temperature  = request.temperature or 25.0
             weather_code = 0
-            weather_info = {"description": "Unknown", "emoji": "🌡️", "temperature": temperature}
+            weather      = None
 
-        # ── Run predictions ──────────────────────────────────
+        # ── 2. Fetch Holiday Impact ──────────────────────────
+        try:
+            holiday_data = await get_holiday_impact(request.datetime_str)
+            is_holiday   = holiday_data["is_holiday"]
+            multiplier   = holiday_data["crowd_multiplier"]
+            print(f"📅  Holiday impact: {holiday_data['impact_label']} (×{multiplier})")
+            if holiday_data["reasons"]:
+                print(f"    Reasons: {', '.join(holiday_data['reasons'])}")
+        except Exception as e:
+            print(f"⚠️  Holiday fetch failed: {e}")
+            holiday_data = None
+            is_holiday   = request.is_holiday
+            multiplier   = 1.0
+
+        # ── 3. Run Predictions ───────────────────────────────
         results = []
         for transport in request.transport_types:
             input_df   = build_input(
                 request.datetime_str,
                 transport.value,
-                request.is_holiday,
+                is_holiday,
                 temperature,
                 weather_code,
                 feature_columns
             )
-            pred_class = model.predict(input_df)[0]
+            pred_class = int(model.predict(input_df)[0])
             pred_proba = model.predict_proba(input_df)[0]
-            confidence = round(float(pred_proba[pred_class]) * 100, 1)
 
-            result = LABEL_MAP[pred_class].copy()
+            # Apply holiday crowd multiplier
+            adjusted_class = apply_multiplier(pred_class, multiplier)
+            confidence     = round(float(pred_proba[pred_class]) * 100, 1)
+
+            result = LABEL_MAP[adjusted_class].copy()
             result['transport']  = transport.value
             result['confidence'] = confidence
             results.append(result)
