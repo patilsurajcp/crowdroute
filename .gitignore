@@ -1,0 +1,21 @@
+cat > .gitignore << EOF
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+*.pkl
+*.joblib
+
+# Data (don't push raw data to GitHub)
+backend/data/raw/
+backend/data/processed/
+
+# Node
+node_modules/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+EOF
