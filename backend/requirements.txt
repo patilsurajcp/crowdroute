@@ -10,3 +10,5 @@ joblib
 imbalanced-learn
 python-dotenv
 psycopg2-binary
+geopy
+googlemaps

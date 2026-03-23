@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
 from enum import Enum
+
 
 class TransportType(str, Enum):
     bus        = "bus"
@@ -13,18 +14,23 @@ class TransportType(str, Enum):
     shared_cab = "shared_cab"
     shikara    = "shikara"
 
+
 class PredictionRequest(BaseModel):
-    datetime_str:     str
-    city:             str
-    transport_types:  List[TransportType] = ["bus", "train"]
-    is_holiday:       Optional[bool]  = False
-    temperature:      Optional[float] = 25.0
+    datetime_str:    str
+    city:            str
+    source:          str
+    destination:     str
+    transport_types: List[TransportType] = ["bus", "train"]
+    is_holiday:      Optional[bool]  = False
+    temperature:     Optional[float] = 25.0
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "datetime_str":    "2024-12-25T08:30:00",
                 "city":            "Hubli",
+                "source":          "Keshwapur",
+                "destination":     "Dharwad Bus Stand",
                 "transport_types": ["bus", "chigari", "train"],
                 "is_holiday":      False,
                 "temperature":     25.0
@@ -32,16 +38,23 @@ class PredictionRequest(BaseModel):
         }
     }
 
+
 class TransportPrediction(BaseModel):
-    transport:   str
-    level:       str
-    emoji:       str
-    confidence:  float
-    advice:      str
+    transport:      str
+    level:          str
+    emoji:          str
+    confidence:     float
+    advice:         str
+    estimated_time: Optional[str] = None
+    route_note:     Optional[str] = None
+
 
 class PredictionResponse(BaseModel):
-    city:         str
-    datetime_str: str
-    best_option:  str
-    results:      List[TransportPrediction]
-    summary:      str
+    city:          str
+    source:        str
+    destination:   str
+    datetime_str:  str
+    best_option:   str
+    results:       List[TransportPrediction]
+    summary:       str
+    route_summary: Optional[str] = None

@@ -115,3 +115,7 @@ with open("app/data/metro_cities.py", "w") as f:
     f.write(content.strip())
 
 print("File written successfully!")
+content = open("app/data/metro_cities.py").read()
+print(content[:200])
+print("---")
+print("Functions found:", "validate_transport_for_route" in content)

@@ -1,4 +1,4 @@
-CITY_TRANSPORT = {
+content = '''CITY_TRANSPORT = {
     "Mumbai":            ["bus", "metro", "train", "ferry"],
     "Delhi":             ["bus", "metro", "train"],
     "Kolkata":           ["bus", "metro", "train", "tram"],
@@ -120,3 +120,17 @@ def get_transport_info(transport_type: str) -> dict:
         "label":       EMOJI_MAP.get(label, f"🚌 {label}"),
         "description": info.get("description", label)
     }
+'''
+
+with open("app/data/metro_cities.py", "w", encoding="utf-8") as f:
+    f.write(content.strip())
+print("metro_cities.py written successfully!")
+
+# Verify
+import importlib.util
+spec = importlib.util.spec_from_file_location("metro_cities", "app/data/metro_cities.py")
+mod  = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+print("get_transport_types('Hubli'):", mod.get_transport_types("Hubli"))
+print("get_transport_info('chigari'):", mod.get_transport_info("chigari"))
+print("Total cities:", len(mod.CITY_TRANSPORT))

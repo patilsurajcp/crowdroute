@@ -3,6 +3,7 @@ from app.services.weather import get_current_weather, get_forecast_weather
 
 router = APIRouter()
 
+
 @router.get("/weather/current/{city}", tags=["Weather"])
 async def current_weather(city: str):
     try:

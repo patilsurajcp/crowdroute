@@ -1,12 +1,11 @@
 import joblib
 import os
 
-# ── Absolute path to saved_models/ ───────────────────────────
 BACKEND_DIR  = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODEL_PATH   = os.path.join(BACKEND_DIR, "ml", "saved_models", "crowd_model.joblib")
 COLUMNS_PATH = os.path.join(BACKEND_DIR, "ml", "saved_models", "feature_columns.joblib")
 
-print(f"📂 Looking for model at: {MODEL_PATH}")   # helpful debug line
+print(f"📂 Looking for model at: {MODEL_PATH}")
 
 
 class ModelLoader:

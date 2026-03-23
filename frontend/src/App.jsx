@@ -2,19 +2,14 @@ import { useState } from 'react'
 import SearchForm    from './components/SearchForm'
 import ResultCard    from './components/ResultCard'
 import WeatherBadge  from './components/WeatherBadge'
-import CrowdMeter    from './components/CrowdMeter'
-import { getPredictions, getCurrentWeather } from './services/api'
-import axios from 'axios'
-
-const BASE_URL = 'http://127.0.0.1:8000/api/v1'
+import { getPredictions, getCurrentWeather, getHolidayImpact } from './services/api'
 
 export default function App() {
-  const [loading,      setLoading]      = useState(false)
-  const [results,      setResults]      = useState(null)
-  const [weather,      setWeather]      = useState(null)
-  const [holiday,      setHoliday]      = useState(null)
-  const [availability, setAvailability] = useState(null)
-  const [error,        setError]        = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [results, setResults] = useState(null)
+  const [weather, setWeather] = useState(null)
+  const [holiday, setHoliday] = useState(null)
+  const [error,   setError]   = useState(null)
 
   const handleSubmit = async (formData) => {
     setLoading(true)
@@ -22,28 +17,16 @@ export default function App() {
     setResults(null)
     setWeather(null)
     setHoliday(null)
-    setAvailability(null)
 
     try {
-      const [predictions, weatherData, holidayData, availData] = await Promise.all([
+      const [predictions, weatherData, holidayData] = await Promise.all([
         getPredictions(formData),
         getCurrentWeather(formData.city).catch(() => null),
-        axios.get(`${BASE_URL}/holiday/impact`, {
-          params: { datetime_str: formData.datetime_str }
-        }).then(r => r.data).catch(() => null),
-        axios.get(`${BASE_URL}/availability`, {
-          params: {
-            city:         formData.city,
-            datetime_str: formData.datetime_str
-          }
-        }).then(r => r.data).catch(() => null)
+        getHolidayImpact(formData.datetime_str).catch(() => null),
       ])
-
       setResults(predictions)
       setWeather(weatherData)
       setHoliday(holidayData)
-      setAvailability(availData)
-
     } catch (err) {
       setError(err.response?.data?.detail || 'Something went wrong. Is the backend running?')
     } finally {
@@ -74,39 +57,66 @@ export default function App() {
         {/* Holiday Alert */}
         {holiday && holiday.impact_label !== 'NORMAL' && (
           <div className={`rounded-2xl px-5 py-4 border-2 space-y-2
-            ${holiday.impact_label === 'VERY HIGH' ? 'bg-red-50 border-red-400' :
+            ${holiday.impact_label === 'VERY HIGH' ? 'bg-red-50 border-red-400'    :
               holiday.impact_label === 'HIGH'      ? 'bg-orange-50 border-orange-400' :
                                                      'bg-yellow-50 border-yellow-400'}`}>
             <div className="flex items-center justify-between">
-              <p className="font-bold text-gray-800">{holiday.impact_emoji} Holiday Impact</p>
-              <span className="text-xs font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-700">
+              <p className="font-bold text-gray-800">{holiday.impact_emoji} Holiday Impact Detected</p>
+              <span className={`text-xs font-bold px-2 py-1 rounded-full
+                ${holiday.impact_label === 'VERY HIGH' ? 'bg-red-100 text-red-700'       :
+                  holiday.impact_label === 'HIGH'      ? 'bg-orange-100 text-orange-700' :
+                                                         'bg-yellow-100 text-yellow-700'}`}>
                 {holiday.impact_label} ×{holiday.crowd_multiplier}
               </span>
             </div>
             <p className="text-sm text-gray-600">{holiday.impact_tip}</p>
-            {holiday.reasons.map((r, i) => (
-              <p key={i} className="text-xs text-gray-500">• {r}</p>
-            ))}
+            {holiday.reasons.length > 0 && (
+              <ul className="text-xs text-gray-500 space-y-1">
+                {holiday.reasons.map((r, i) => <li key={i}>• {r}</li>)}
+              </ul>
+            )}
+            {holiday.nearby_holidays.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <p className="text-xs font-semibold text-gray-500 mb-1">📅 Nearby Holidays:</p>
+                <div className="flex flex-wrap gap-2">
+                  {holiday.nearby_holidays.map((h, i) => (
+                    <span key={i} className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1">
+                      {h.date} — {h.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Live Seat Availability */}
-        {availability && (
-          <div className="space-y-3">
-            <h2 className="font-bold text-gray-700 text-sm uppercase tracking-wide">
-              📊 Live Crowd Occupancy
-            </h2>
-            {['bus', 'train', 'metro'].map(transport => (
-              <CrowdMeter
-                key={transport}
-                transport={transport}
-                availability={availability[transport]}
-              />
-            ))}
+        {/* Route Summary */}
+        {results && results.route_summary && (
+          <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-3 shadow text-sm">
+            <span>📍</span>
+            <span className="font-semibold text-gray-700">{results.source}</span>
+            <span className="text-gray-400">→</span>
+            <span>🏁</span>
+            <span className="font-semibold text-gray-700">{results.destination}</span>
+            <span className="ml-auto text-blue-500 font-semibold">{results.city}</span>
           </div>
         )}
 
-        {/* ML Predictions */}
+        {/* Traffic Badge */}
+        {results && results.route_summary && results.route_summary.includes('traffic') && (
+          <div className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm border
+        ${results.route_summary.includes('HIGH')   ? 'bg-red-50 border-red-300'    :
+         results.route_summary.includes('MEDIUM') ? 'bg-yellow-50 border-yellow-300' :
+                                                  'bg-green-50 border-green-300'}`}>
+        <span className="text-xl">🚦</span>
+        <div>
+        <p className="font-semibold text-gray-700">Live Traffic Conditions</p>
+        <p className="text-gray-500 text-xs">{results.route_summary}</p>
+       </div>
+      </div>
+      )}
+
+        {/* Results */}
         {results && (
           <div className="space-y-4">
             <div className="bg-blue-600 text-white rounded-2xl px-5 py-4 text-center shadow-lg">
