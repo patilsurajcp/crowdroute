@@ -27,7 +27,6 @@ LABEL_MAP = {
     2: {"level": "HIGH",   "emoji": "🔴", "advice": "Very crowded — consider an alternate time."}
 }
 
-# All Indian city names for intercity detection
 INDIAN_CITIES = [
     "mumbai", "delhi", "bengaluru", "bangalore", "chennai", "kolkata",
     "hyderabad", "pune", "ahmedabad", "jaipur", "lucknow", "hubli",
@@ -47,32 +46,26 @@ INDIAN_CITIES = [
 
 
 def is_intercity_route(source: str, destination: str, city: str) -> bool:
-    """
-    Detect if the route spans multiple cities.
-    Uses full address strings from Google Places autocomplete.
-    """
+    """Detect if the route spans multiple cities using full address strings."""
     city_lower = city.lower()
     dest_lower = destination.lower()
     src_lower  = source.lower()
 
-    # Check if destination explicitly mentions a different Indian city
     for other_city in INDIAN_CITIES:
         if other_city == city_lower:
             continue
-        # Skip if it's just a substring match with selected city
         if other_city in city_lower or city_lower in other_city:
             continue
         if other_city in dest_lower:
             print(f"🚌 Intercity detected: destination contains '{other_city}' (selected: {city})")
             return True
 
-    # Also check if source is in a different city than destination
     src_cities  = [c for c in INDIAN_CITIES if c in src_lower]
     dest_cities = [c for c in INDIAN_CITIES if c in dest_lower]
 
     if src_cities and dest_cities:
         if set(src_cities).isdisjoint(set(dest_cities)):
-            print(f"🚌 Intercity: src_cities={src_cities} dest_cities={dest_cities}")
+            print(f"🚌 Intercity: src={src_cities} dest={dest_cities}")
             return True
 
     return False
@@ -125,7 +118,7 @@ async def predict_crowd(request: PredictionRequest):
         warnings            = []
 
         for transport in request.transport_types:
-            # For intercity routes — only bus and train are valid
+            # Intercity → only bus and train
             if intercity and transport.value not in ['bus', 'train']:
                 warnings.append(
                     f"{transport.value.upper()} removed — not available for intercity travel."
@@ -189,11 +182,15 @@ async def predict_crowd(request: PredictionRequest):
             hol_multiplier = 1.0
 
         # ── 6. Combined Multiplier ───────────────────────────
-        # For intercity — traffic on long routes matters less
         if intercity:
-            traffic_multiplier = 1.0   # reset — highway traffic ≠ city crowd
-        combined_multiplier = min(hol_multiplier * traffic_multiplier, 2.5)
-        print(f"📊  Combined multiplier: ×{combined_multiplier:.2f}")
+            # For intercity — don't apply city traffic multiplier
+            # Highway traffic ≠ train/bus crowd level
+            # Keep holiday multiplier only
+            combined_multiplier = min(hol_multiplier, 2.5)
+            print(f"🌐  Intercity mode — holiday multiplier only: ×{hol_multiplier:.2f}")
+        else:
+            combined_multiplier = min(hol_multiplier * traffic_multiplier, 2.5)
+            print(f"📊  Combined multiplier: ×{combined_multiplier:.2f}")
 
         # ── 7. Run Predictions ───────────────────────────────
         results = []
@@ -241,14 +238,14 @@ async def predict_crowd(request: PredictionRequest):
         if warnings:
             summary += " | ⚠️ " + " | ".join(warnings)
 
-        # NEW — always show traffic ✅
+        # ── Always show traffic info ─────────────────────────
         route_summary = (
-        f"{request.source} → {request.destination}"
-        + (f" ({distance_km} km)"              if distance_km else "")
-        + (" 🌐 Intercity"                     if intercity   else "")
-        + (f" · {route_data['traffic_emoji']} {traffic_level} traffic"
-       if traffic_level != 'UNKNOWN'       else "")
-    )
+            f"{request.source} → {request.destination}"
+            + (f" ({distance_km} km)"                      if distance_km             else "")
+            + (" 🌐 Intercity"                              if intercity               else "")
+            + (f" · {route_data['traffic_emoji']} {traffic_level} traffic"
+               if traffic_level != 'UNKNOWN'                else "")
+        )
 
         return PredictionResponse(
             city=request.city,
